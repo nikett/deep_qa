@@ -1,7 +1,6 @@
 # pylint: disable=no-self-use,invalid-name
 
 from deep_qa.data.instances.text_classification.frame_instance import FrameInstance, IndexedFrameInstance
-from ....common.test_case import DeepQaTestCase
 
 # Example of a typical input
 line = "event:plant absorb water###participant:water###agent:plant###finalloc:soil"+"\t"+"finalloc:soil"
@@ -17,7 +16,11 @@ class TestFrameInstance:
         machine_slotvals = ""+instance.text.__str__()
         # what we expect
         expected_label = "soil"
-        expected_slotsvals = "['plant', 'unk', 'unk', 'unk', 'unk', 'plant absorb water', 'ques', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'water']"
+        expected_slotsvals = "['plant', 'unk', 'unk', 'unk', 'unk', " \
+                             "'plant absorb water', 'ques', 'unk', 'unk', " \
+                             "'unk', 'unk', 'unk', 'unk', 'unk', 'unk', " \
+                             "'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk', " \
+                             "'unk', 'unk', 'unk', 'unk', 'water']"
         # do they match?
         assert machine_label == expected_label
         assert machine_slotvals == expected_slotsvals
@@ -31,11 +34,14 @@ class TestIndexedFrameInstance:
 
     def test_words_from_frame_aggregated_correctly(self):
         # TODO open a PR request to provide fixed length padding e.g. 6
-        indexedInstance = IndexedFrameInstance([[1000], [1,2,3,4,5,6,7,8], [1, 2, 3]], [1, 2, 3])
+        indexed_instance = IndexedFrameInstance([[1000], [1, 2, 3, 4, 5, 6, 7, 8],
+                                                 [1, 2, 3]], [1, 2, 3])
         # unpadded label should be read correctly.
-        assert indexedInstance.label.__str__() == "[1, 2, 3]"
-        padding_lengths = indexedInstance.get_padding_lengths()
+        assert indexed_instance.label.__str__() == "[1, 2, 3]"
+        padding_lengths = indexed_instance.get_padding_lengths()
         assert padding_lengths.__str__() == "{'num_sentence_words': 6}"
-        indexedInstance.pad(padding_lengths)
-        assert indexedInstance.label.__str__() == "[1, 2, 3, 0, 0, 0]"
-        assert indexedInstance.word_indices.__str__() == "[[1000, 0, 0, 0, 0, 0], [1, 2, 3, 4, 5, 6], [1, 2, 3, 0, 0, 0]]"
+        indexed_instance.pad(padding_lengths)
+        assert indexed_instance.label.__str__() == "[1, 2, 3, 0, 0, 0]"
+        assert indexed_instance.word_indices.__str__() == "[[1000, 0, 0, 0, 0, 0], " \
+                                                          "[1, 2, 3, 4, 5, 6], " \
+                                                          "[1, 2, 3, 0, 0, 0]]"

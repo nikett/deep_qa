@@ -20,16 +20,21 @@ from ...data_indexer import DataIndexer
 #            "unk", "unk", "water"]
 #
 #    padded to a fixed length of say, 5 words per phrase.
-#           ["plant P P P P", "unk P P P P", "unk P P P P", "unk P P P P", "unk P P P P", "plant absorb water P P ",
-#             ...
+#           ["plant P P P P",
+#            "unk P P P P",
+#            "unk P P P P",
+#            "unk P P P P",
+#            "unk P P P P",
+#            "plant absorb water P P ",
+#             ...]
 
 # TODO PR request for having these in the json as an application specific content
 # the slotnames can vary according to different end applications, e.g., a HowTo tuple, OpenIE tuple ...
-SLOTNAMES_ORDERED =["agent", "beneficiary", "causer", "context", "definition", "event",
-     "finalloc", "headverb", "initloc", "input", "output", "manner",
-     "patient", "resultant", "timebegin", "timeend", "temporal", "hierarchical",
-     "similar", "contemporary", "enables", "mechanism", "condition", "purpose",
-     "cause", "openrel", "participant"]
+SLOTNAMES_ORDERED = ["agent", "beneficiary", "causer", "context", "definition", "event",
+                     "finalloc", "headverb", "initloc", "input", "output", "manner",
+                     "patient", "resultant", "timebegin", "timeend", "temporal", "hierarchical",
+                     "similar", "contemporary", "enables", "mechanism", "condition", "purpose",
+                     "cause", "openrel", "participant"]
 UNKNOWN_SLOTVAL = "unk"  # making an open world assumption, we do not observe all the values
 QUES_SLOTVAL = "ques"  # this slot in the frame must be queried/completed.
 MAX_PHRASE_LEN = 6
@@ -41,7 +46,8 @@ class FrameInstance(TextInstance):
     """
     def __init__(self,
                  # the input can have only few slots and not all and in any random order.
-                 # e.g., "event:plant absorb water###participant:water###agent:plant###finalloc:soil" TAB "agent:plant"
+                 # e.g., "event:plant absorb water###participant:water###agent:plant###finalloc:soil"
+                 # TAB "agent:plant"
                  text: List[str],
                  # output is a phrase
                  label: str=None):
@@ -63,23 +69,23 @@ class FrameInstance(TextInstance):
         return {"words": words}
 
     @staticmethod
-    # s: "participant:water" => name=participant, val=water
-    def slot_from(s: str, kv_separator: str=":"):
-        kv = s.split(kv_separator)
-        return {'name': kv[0], 'val': kv[1]}
+    # slot_as_string: "participant:water" => name=participant, val=water
+    def slot_from(slot_as_string: str, kv_separator: str=":"):
+        slot_name_val = slot_as_string.split(kv_separator)
+        return {'name': slot_name_val[0], 'val': slot_name_val[1]}
 
     @staticmethod
-    # s: "event:plant absorb water###participant:water" TAB "participant:water"
-    def unpack_input(s: str, kv_separator: str="\t"):
+    # frame_as_string: "event:plant absorb water###participant:water" TAB "participant:water"
+    def unpack_input(frame_as_string: str, kv_separator: str="\t"):
         # no information is lost in lowercasing, and simplifies matching.
-        kv = s.lower().split(kv_separator)
-        if len(kv) != 2:
-            raise RuntimeError("Unexpected number (not 2) of fields in frame: " + s)
-        return {'content': kv[0], 'query': kv[1]}
+        partialframe_query = frame_as_string.lower().split(kv_separator)
+        if len(partialframe_query) != 2:
+            raise RuntimeError("Unexpected number (not 2) of fields in frame: " + frame_as_string)
+        return {'content': partialframe_query[0], 'query': partialframe_query[1]}
 
     @staticmethod
-    def given_slots_from(s: str, values_separator: str= "###", kv_separator: str= ":"):
-        return dict(map(lambda x: x.split(kv_separator), s.split(values_separator)))
+    def given_slots_from(slots_csv: str, values_separator: str="###", kv_separator: str=":"):
+        return dict(map(lambda x: x.split(kv_separator), slots_csv.split(values_separator)))
 
     # Performs two types of padding:
     # i) unobserved slots are filled with self.unknown_slotval
@@ -101,19 +107,16 @@ class FrameInstance(TextInstance):
     def read_from_line(cls, line: str):
         """
         Reads a FrameInstance from a line.  The format is:
-        
-        frame represented as list of <role:role value phrase of maxlen 5> TAB <label> 
+        frame represented as list of <role:role value phrase of maxlen 5> TAB <label>
         e.g., from
         event:plant absorb water###participant:water###agent:plant###finalloc:soil
-
-        to
+              to
         ["plant", "unk", "unk", "unk", "unk", "plant absorb water",
             "soil", "unk", "unk", "unk", "unk", "unk",
             "unk", "unk", "unk", "unk", "unk", "unk",
            "unk", "unk", "unk", "unk", "unk", "unk",
             "unk", "unk", "water"]
-            
-        Provides ordering and sparseness flexibility to the input text. 
+        Provides ordering and sparseness flexibility to the input text.
         """
         # Extract the query slot name and expected value
         # e.g. from, participant:water, extract the expected slot value "water"
@@ -163,7 +166,8 @@ class IndexedFrameInstance(IndexedInstance):
          ["1000 0 0 0 0", "-1 0 0 0 0", "-1 0 0 0 0", "-1 0 0 0 0", "-1 0 0 0 0", "1 2 3 0 0",..]
         """
         truncate_from_right = False
-        self.word_indices = [self.pad_word_sequence(indices, padding_lengths, truncate_from_right) for indices in self.word_indices]
+        self.word_indices = [self.pad_word_sequence(indices, padding_lengths, truncate_from_right)
+                             for indices in self.word_indices]
         self.label = self.pad_word_sequence(self.label, padding_lengths, truncate_from_right)
 
     @overrides
@@ -171,4 +175,3 @@ class IndexedFrameInstance(IndexedInstance):
         frame_matrix = numpy.asarray(self.word_indices, dtype='int32')
         label_list = numpy.asarray(self.label, dtype='int32')
         return frame_matrix, label_list
-
