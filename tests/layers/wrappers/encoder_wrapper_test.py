@@ -11,8 +11,6 @@ from ...common.test_case import DeepQaTestCase
 
 class TestEncoderWrapper(DeepQaTestCase):
     def test_mask_is_computed_correctly(self):
-        # TODO(matt): I don't really like having to build a model to test this, but I'm not sure of
-        # how else to do it.
         background_input = Input(shape=(3, 3), dtype='int32')
         embedding = TimeDistributedEmbedding(input_dim=3, output_dim=2, mask_zero=True)
         embedded_background = embedding(background_input)
