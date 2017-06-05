@@ -45,13 +45,22 @@ class FrameInstance(TextInstance):
         return {"words": words}
 
     @staticmethod
-    def slot_from(slot_as_string: str, kv_separator: str=":"):
+    def query_slot_from(slot_as_string: str,
+                        sparse_given_frame: Dict[str, str],
+                        kv_separator: str=":"):
         """
         :param slot_as_string: "participant:water"
+        :param sparse_given_frame: If the expected slot name is given in the query
+        but its value is not, then pick the value from the sparse_given_frame
         :param kv_separator: typically colon separated
         :return: name=participant, val=water
         """
         slot_name_val = slot_as_string.split(kv_separator)
+        # Suppose slot_as_string is: participant (i.e. no value is specified)
+        # this is assumed as participant:BLANK_VALUE, if we cannot look it up in the partial frame.
+        if len(slot_name_val) == 1:
+            slot_name_val = (slot_as_string + ":" +
+                             sparse_given_frame.get(slot_name_val[0], '')).split(kv_separator)
         return {'name': slot_name_val[0], 'val': slot_name_val[1]}
 
     @staticmethod
@@ -125,8 +134,8 @@ class FrameInstance(TextInstance):
         # Extract the query slot name and expected value
         # e.g. from, participant:water, extract the expected slot value "water"
         unpacked_input = cls.unpack_input(line)
-        query_slot = cls.slot_from(unpacked_input['query'])
         given_slots = cls.given_slots_from(unpacked_input['content'])
+        query_slot = cls.query_slot_from(unpacked_input['query'], given_slots)
         padded_slots = cls.padded_slots_from(given_slots, query_slot['name'])
         return cls(padded_slots, phrase_in_queried_slot=query_slot['val'])
 

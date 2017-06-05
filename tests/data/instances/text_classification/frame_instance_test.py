@@ -15,6 +15,11 @@ class TestFrameInstance(DeepQaTestCase):
                     "agent:plant###" \
                     "finalloc:soil"\
                     + "\t" + "finalloc:soil"
+        self.line_with_no_label_val = "event:plant absorb water###" \
+                    "participant:water###" \
+                    "agent:plant###" \
+                    "finalloc:soil" \
+                    + "\t" + "finalloc"
         self.padded_slots = ['plant', 'unk', 'unk', 'unk', 'unk',
                              'plant absorb water', 'ques', 'unk', 'unk',
                              'unk', 'unk', 'unk', 'unk', 'unk', 'unk',
@@ -24,30 +29,44 @@ class TestFrameInstance(DeepQaTestCase):
         for word in ['plant', 'unk', 'absorb', 'ques', 'water', 'soil']:
             self.data_indexer.add_word_to_index(word)
 
-    def tearDown(self):
-        super(TestFrameInstance, self).tearDown()
-
     def test_convert_instance_to_indexed_instance(self):
         instance = FrameInstance.read_from_line(self.line)
         indexed_instance = instance.to_indexed_instance(self.data_indexer)
-        print(instance.label + "\t padded to: " + indexed_instance.label.__str__())
-        print(indexed_instance.word_indices.__str__())
-        assert indexed_instance.label == [self.data_indexer.get_word_index('soil')]  # TODO
+        assert indexed_instance.label == [self.data_indexer.get_word_index('soil')]
+
+    def test_convert_instance_no_label_value_to_indexed_instance(self):
+        instance = FrameInstance.read_from_line(self.line_with_no_label_val)
+        indexed_instance = instance.to_indexed_instance(self.data_indexer)
+        assert indexed_instance.label == [self.data_indexer.get_word_index('soil')]
 
     def test_slots_unwrap_correctly(self):
         instance = FrameInstance.read_from_line(self.line)
-        # what we get
-        # TODO: consider when label is OOV or finalloc instead of finalloc:soil
+        # what we construct
         machine_label = instance.label
-        machine_slotvals = instance.text
+        machine_slot_values = instance.text
         # what we expect
         expected_label = "soil"
         # do they match?
         assert machine_label == expected_label
-        assert machine_slotvals == self.padded_slots
+        assert machine_slot_values == self.padded_slots
+
+    def test_slots_no_label_value_unwrap_correctly(self):
+        instance = FrameInstance.read_from_line(self.line_with_no_label_val)
+        # what we construct
+        machine_label = instance.label
+        machine_slot_values = instance.text
+        # what we expect
+        expected_label = "soil"
+        # do they match?
+        assert machine_label == expected_label
+        assert machine_slot_values == self.padded_slots
 
     def test_words_from_frame_aggregated_correctly(self):
         instance = FrameInstance.read_from_line(self.line)
+        assert len(instance.words()['words']) == 30
+
+    def test_words_from_no_label_value_frame_aggregated_correctly(self):
+        instance = FrameInstance.read_from_line(self.line_with_no_label_val)
         assert len(instance.words()['words']) == 30
 
 
