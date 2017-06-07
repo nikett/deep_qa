@@ -15,7 +15,6 @@ SLOTNAMES_ORDERED = ["agent", "beneficiary", "causer", "context", "definition", 
                      "cause", "openrel", "participant"]
 UNKNOWN_SLOTVAL = "unk"  # making an open world assumption, we do not observe all the values
 QUES_SLOTVAL = "ques"  # this slot in the frame must be queried/completed.
-MAX_PHRASE_LEN = 6
 
 
 class FrameInstance(TextInstance):
@@ -24,10 +23,10 @@ class FrameInstance(TextInstance):
     A FrameInstance is a kind of TextInstance that has text in multiple slots. This generalizes a FrameInstance.
     """
     def __init__(self,
-                 padded_slots: List[str],
+                 dense_frame: List[str],
                  phrase_in_queried_slot: str=None):  # output label is a phrase
         super(FrameInstance, self).__init__(phrase_in_queried_slot)
-        self.text = padded_slots  # "event:plant absorb water###participant:water###agent:plant" TAB "agent:plant"
+        self.text = dense_frame  # "event:plant absorb water###participant:water###agent:plant" TAB "agent:plant"
 
     def __str__(self):
         return 'FrameInstance( [' + ',\n'.join(self.text) + '] , ' + str(self.label) + ')'
@@ -91,8 +90,8 @@ class FrameInstance(TextInstance):
         return dict(map(lambda x: x.split(kv_separator), slots_csv.split(values_separator)))
 
     @staticmethod
-    def padded_slots_from(sparse_frame: Dict[str, str],
-                          query_slotname: str):
+    def dense_frame_from(sparse_frame: Dict[str, str],
+                         query_slotname: str):
         """
         Performs two types of padding:
         i) unobserved slots are filled with self.unknown_slotval
@@ -110,7 +109,7 @@ class FrameInstance(TextInstance):
                 slots.append(QUES_SLOTVAL)
             elif slotname in sparse_frame:  # observed hence as-is
                 slots.append(sparse_frame[slotname])
-            else:  # unobserved hence padded
+            else:  # unobserved hence inserted
                 slots.append(UNKNOWN_SLOTVAL)
         return slots
 
@@ -134,10 +133,10 @@ class FrameInstance(TextInstance):
         # Extract the query slot name and expected value
         # e.g. from, participant:water, extract the expected slot value "water"
         unpacked_input = cls.unpack_input(line)
-        given_slots = cls.given_slots_from(unpacked_input['content'])
-        query_slot = cls.query_slot_from(unpacked_input['query'], given_slots)
-        padded_slots = cls.padded_slots_from(given_slots, query_slot['name'])
-        return cls(padded_slots, phrase_in_queried_slot=query_slot['val'])
+        given_sparse_frame = cls.given_slots_from(unpacked_input['content'])
+        query_slot = cls.query_slot_from(unpacked_input['query'], given_sparse_frame)
+        dense_frame = cls.dense_frame_from(given_sparse_frame, query_slot['name'])
+        return cls(dense_frame, phrase_in_queried_slot=query_slot['val'])
 
     @overrides
     def to_indexed_instance(self, data_indexer: DataIndexer):
@@ -170,9 +169,17 @@ class IndexedFrameInstance(IndexedInstance):
 
     @overrides
     def get_padding_lengths(self) -> Dict[str, int]:
-        # The parent class somehow understands the semantics of these dictionary keys.
-        # would be better if these keys were more explicit, e.g., as enumerations.
-        return {'num_sentence_words': MAX_PHRASE_LEN}
+        # Record the length of every slot content
+        # Let the model pad to the max phrase length#
+        # e.g., ["1000", "1", "1", "1", "1", "1 2 3",..]
+        # slotlen  1,1,1,1,3..
+        # Expected: Dict ['some key', 3] which is the max phrase len across all slots.
+        all_slot_lengths = [self._get_word_sequence_lengths(slot_indices) for slot_indices in self.word_indices]
+        # find the max from all_slot_lengths
+        lengths = {}
+        for key in all_slot_lengths[0]:
+            lengths[key] = max(slot_lengths[key] for slot_lengths in all_slot_lengths)
+        return lengths
 
     @overrides
     def pad(self, padding_lengths: Dict[str, int]):

@@ -78,9 +78,9 @@ class TestIndexedFrameInstance(DeepQaTestCase):
         # unpadded label should be read correctly.
         assert indexed_instance.label == [1, 2, 3]
         padding_lengths = indexed_instance.get_padding_lengths()
-        assert padding_lengths['num_sentence_words'] == 6
+        assert padding_lengths['num_sentence_words'] == 8
         indexed_instance.pad(padding_lengths)
-        assert indexed_instance.label == [1, 2, 3, 0, 0, 0]
-        assert indexed_instance.word_indices == [[1000, 0, 0, 0, 0, 0],
-                                                 [1, 2, 3, 4, 5, 6],
-                                                 [1, 2, 3, 0, 0, 0]]
+        assert indexed_instance.label == [1, 2, 3, 0, 0, 0, 0, 0]
+        assert indexed_instance.word_indices == [[1000, 0, 0, 0, 0, 0, 0, 0],
+                                                 [1, 2, 3, 4, 5, 6, 7, 8],
+                                                 [1, 2, 3, 0, 0, 0, 0, 0]]
