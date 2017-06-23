@@ -6,14 +6,14 @@ from overrides import overrides
 from ..instance import TextInstance, IndexedInstance
 from ...data_indexer import DataIndexer
 
-# TODO PR request for having these in the json as an application specific content
+# TODO PR request for having these in the json as an application specific configuration.
 # the slotnames can vary according to different end applications, e.g., a HowTo tuple, OpenIE tuple ...
 SLOTNAMES_ORDERED = ["agent", "beneficiary", "causer", "context", "definition", "event",
                      "finalloc", "headverb", "initloc", "input", "output", "manner",
                      "patient", "resultant", "timebegin", "timeend", "temporal", "hierarchical",
                      "similar", "contemporary", "enables", "mechanism", "condition", "purpose",
                      "cause", "openrel", "participant"]
-UNKNOWN_SLOTVAL = "unk"  # making an open world assumption, we do not observe all the values
+UNKNOWN_SLOTVAL = "missingval"  # making an open world assumption, we do not observe all the values
 QUES_SLOTVAL = "ques"  # this slot in the frame must be queried/completed.
 
 
@@ -41,7 +41,7 @@ class FrameInstance(TextInstance):
             words.extend(phrase_words['words'])
         label_words = self._words_from_text(self.label)
         words.extend(label_words['words'])
-        return {"words": words}
+        return {'words': words, 'slot_names': SLOTNAMES_ORDERED}
 
     @staticmethod
     def query_slot_from(slot_as_string: str,
@@ -101,7 +101,7 @@ class FrameInstance(TextInstance):
                 slotnames -> slot phrase [event -> plant absorb water , participant -> water]
         :param query_slotname:
                 participant
-        :return: [plant absorb water, ques, unk, unk, ...]
+        :return: [plant absorb water, ques, missingval, missingval, ...]
         """
         slots = []
         for slotname in SLOTNAMES_ORDERED:
@@ -122,11 +122,11 @@ class FrameInstance(TextInstance):
         e.g., from
         event:plant absorb water###participant:water###agent:plant###finalloc:soil
               to
-        ["plant", "unk", "unk", "unk", "unk", "plant absorb water",
-          "soil", "unk", "unk", "unk", "unk", "unk",
-          "unk", "unk", "unk", "unk", "unk", "unk",
-          "unk", "unk", "unk", "unk", "unk", "unk",
-          "unk", "unk", "water"]
+        ["plant", "missingval", "missingval", "missingval", "missingval", "plant absorb water",
+          "soil", "missingval", "missingval", "missingval", "missingval", "missingval",
+          "missingval", "missingval", "missingval", "missingval", "missingval", "missingval",
+          "missingval", "missingval", "missingval", "missingval", "missingval", "missingval",
+          "missingval", "missingval", "water"]
         Provides ordering (input can be composed of slots in arbitrary order)
         and sparseness flexibility (only a few slots can be mentioned in the input).
         """

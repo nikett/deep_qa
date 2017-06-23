@@ -20,13 +20,13 @@ class TestFrameInstance(DeepQaTestCase):
                     "agent:plant###" \
                     "finalloc:soil" \
                     + "\t" + "finalloc"
-        self.padded_slots = ['plant', 'unk', 'unk', 'unk', 'unk',
-                             'plant absorb water', 'ques', 'unk', 'unk',
-                             'unk', 'unk', 'unk', 'unk', 'unk', 'unk',
-                             'unk', 'unk', 'unk', 'unk', 'unk', 'unk', 'unk',
-                             'unk', 'unk', 'unk', 'unk', 'water']
+        self.padded_slots = ['plant', 'missingval', 'missingval', 'missingval', 'missingval',
+                             'plant absorb water', 'ques', 'missingval', 'missingval',
+                             'missingval', 'missingval', 'missingval', 'missingval', 'missingval', 'missingval',
+                             'missingval', 'missingval', 'missingval', 'missingval', 'missingval', 'missingval', 'missingval',
+                             'missingval', 'missingval', 'missingval', 'missingval', 'water']
         self.data_indexer = DataIndexer()
-        for word in ['plant', 'unk', 'absorb', 'ques', 'water', 'soil']:
+        for word in ['plant', 'missingval', 'absorb', 'ques', 'water', 'soil']:
             self.data_indexer.add_word_to_index(word)
 
     def test_convert_instance_to_indexed_instance(self):
