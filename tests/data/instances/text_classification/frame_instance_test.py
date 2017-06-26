@@ -13,18 +13,18 @@ class TestFrameInstance(DeepQaTestCase):
         self.line = "event:plant absorb water###" \
                     "participant:water###" \
                     "agent:plant###" \
-                    "finalloc:soil"\
+                    "finalloc:soil" \
                     + "\t" + "finalloc:soil"
         self.line_with_no_label_val = "event:plant absorb water###" \
-                    "participant:water###" \
-                    "agent:plant###" \
-                    "finalloc:soil" \
-                    + "\t" + "finalloc"
+                                      "participant:water###" \
+                                      "agent:plant###" \
+                                      "finalloc:soil" \
+                                      + "\t" + "finalloc"
         self.padded_slots = ['plant', 'missingval', 'missingval', 'missingval', 'missingval',
                              'plant absorb water', 'ques', 'missingval', 'missingval',
                              'missingval', 'missingval', 'missingval', 'missingval', 'missingval', 'missingval',
-                             'missingval', 'missingval', 'missingval', 'missingval', 'missingval', 'missingval', 'missingval',
-                             'missingval', 'missingval', 'missingval', 'missingval', 'water']
+                             'missingval', 'missingval', 'missingval', 'missingval', 'missingval', 'missingval',
+                             'missingval', 'missingval', 'missingval', 'missingval', 'missingval', 'water']
         self.data_indexer = DataIndexer()
         for word in ['plant', 'missingval', 'absorb', 'ques', 'water', 'soil']:
             self.data_indexer.add_word_to_index(word)

@@ -1,11 +1,11 @@
 from overrides import overrides
 
-from keras.layers import Dense, Dropout, Input, Multiply, Concatenate, Average
+from keras.layers import Dense, Dropout, Input
 
-from deep_qa.data.instances.text_classification.frame_instance import FrameInstance
-from deep_qa.data.instances.text_classification import concrete_instances
+# from deep_qa.data.instances.text_classification import concrete_instances
+from deep_qa.data.instances.sequence_tagging import concrete_instances
 from deep_qa.layers.encoders import BOWEncoder
-from deep_qa.layers.encoders.AveragedBOWEncoder import IndexedBOWEncoder
+from deep_qa.layers.encoders.AveragedBOWEncoder import AveragedBOWEncoder
 from ...training.text_trainer import TextTrainer
 from ...training.models import DeepQaModel
 from ...common.params import Params
@@ -13,13 +13,13 @@ from ...common.params import Params
 
 class FrameClozeModel(TextTrainer):
     """
-    This ``FrameClozeModel`` is a type of text train with: 
+    This ``FrameClozeModel`` is a type of text train with:
     ------------
     Input/ Output
     ------------
-    input: a partial frame (list of phrases in a fixed order), a query (slot to complete). 
-    predicts: an embedding for the query slot 
-    where, 
+    input: a partial frame (list of phrases in a fixed order), a query (slot to complete).
+    predicts: an embedding for the query slot
+    where,
     - partial frame is a list of phrases in a fixed order, see ``FrameInstance`` for examples,
     - query is the slot to complete. Instead of a one hot vector we provide it with a default token (ques)
     - embedding for the queried slot is the BOW representation of the phrase value of the queried slot.
@@ -27,7 +27,7 @@ class FrameClozeModel(TextTrainer):
     Network architecture
     ---------------------
     We use BOW encoder along with a dense layer.
-    We use stacked seq2seq encoders followed by a dense layer.    
+    We use stacked seq2seq encoders followed by a dense layer.
     ----------
     Parameters
     ----------
@@ -42,7 +42,7 @@ class FrameClozeModel(TextTrainer):
         self.num_stacked_rnns = params.pop('num_stacked_rnns', 1)
         instance_type = params.pop('instance_type', "FrameInstance")
         self.nearest_neighbor_dim = params.pop('nearest_neighbor_dim', 200)
-        self.instance_type = concrete_instances[instance_type]
+        self.instance_type = concrete_instances[instance_type]  # TODO is this a bug?
         super(FrameClozeModel, self).__init__(params)
         self.num_slots = self._instance_type().words['slot_names']
 
@@ -66,14 +66,14 @@ class FrameClozeModel(TextTrainer):
 
         # Step 2: Pass the sequences of word vectors through the sentence encoder to get a sentence vector.
         # Shape: (batch_size, number_of_slots, max_phrase_len, embedding_dim)
-        slot_embedding = self._embed_input(slots_input)
+        each_slot_embedding = self._embed_input(slots_input)
 
         # average out over phrase_len:
         # from: batch_size, number_of_slots, phrase_len, embedding_dim
         # output should become: batch_size, number_of_slots, embedding_dim
-        averaging_layer = IndexedBOWEncoder(2)
+        averaging_layer = AveragedBOWEncoder(2, 4)
         # batch_size, number_of_slots, embedding_dim
-        slot_embedding = averaging_layer(slot_embedding)
+        each_slot_embedding = averaging_layer(each_slot_embedding)
 
         # Shape: (batch_size, number_of_slots, embedding_dim)
         # We first convert a sentence to a sequence of word embeddings
@@ -82,20 +82,25 @@ class FrameClozeModel(TextTrainer):
             encoder = self._get_seq2seq_encoder(name="encoder_{}".format(i),
                                                 fallback_behavior="use default params")
             # shape still (batch_size, number_of_slots, 2 * embedding_dim)
-            slot_embedding = encoder(slot_embedding)
+            each_slot_embedding = encoder(each_slot_embedding)
 
+        # From (batch_size, number_of_slots, 2 * embedding_dim),
+        # convert to batch_size, 2*embedding_dim
         bow_features = BOWEncoder()
-        # batch_size, 2*embedding_dim
-        avg_slot_embedding = bow_features(slot_embedding)
+        avg_slot_embedding = bow_features(each_slot_embedding)
         # Add a dropout after LSTM.
         regularized_embedding = Dropout(0.2)(avg_slot_embedding)
 
-        # Step 3: Dense projection (batch_size, 2*embedding_dim)
+        # Step 3: Dense projection
+        # From:(batch_size, 2*embedding_dim),
+        # convert to (batch_size, nn_embedding_dim),
+        # so, a dense layer is needed
         projection_layer = Dense(int(self.nearest_neighbor_dim), activation='relu', name='projector')
-        # Shape should be converted to (batch_size, embedding_dim), hence a dense layer is needed
         projected_frame = projection_layer(regularized_embedding)
 
         # Step 4: Define squared loss against labels as the loss.
+        # TODO: this requires that training input contain a vector representation of the queried slot as label.
+        # Further, we need to find all the possible nearest neighbors for this vector.
         return DeepQaModel(inputs=slots_input, outputs=projected_frame)
 
     def _instance_type(self):

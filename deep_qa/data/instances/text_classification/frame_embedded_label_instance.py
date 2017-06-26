@@ -6,7 +6,6 @@ from overrides import overrides
 from ..instance import TextInstance, IndexedInstance
 from ...data_indexer import DataIndexer
 
-# TODO PR request for having these in the json as an application specific configuration.
 # the slotnames can vary according to different end applications, e.g., a HowTo tuple, OpenIE tuple ...
 SLOTNAMES_ORDERED = ["agent", "beneficiary", "causer", "context", "definition", "event",
                      "finalloc", "headverb", "initloc", "input", "output", "manner",
@@ -17,50 +16,51 @@ UNKNOWN_SLOTVAL = "missingval"  # making an open world assumption, we do not obs
 QUES_SLOTVAL = "ques"  # this slot in the frame must be queried/completed.
 
 
-class FrameInstance(TextInstance):
+class FrameEmbeddedLabelInstance(TextInstance):
 
     """
-    A FrameInstance is a kind of TextInstance that has text in multiple slots. This generalizes a FrameInstance.
+    A FrameEmbeddedLabelInstance is a kind of TextInstance that has text in multiple slots.
     """
     def __init__(self,
                  dense_frame: List[str],
-                 phrase_in_queried_slot: str=None):  # output label is a phrase
-        super(FrameInstance, self).__init__(phrase_in_queried_slot)
+                 phrase_dims_in_queried_slot: numpy.array):  # output label: vector representation of label phrase
+        super(FrameEmbeddedLabelInstance, self).__init__(phrase_dims_in_queried_slot)
         self.text = dense_frame  # "event:plant absorb water###participant:water###agent:plant" TAB "agent:plant"
 
     def __str__(self):
-        return 'FrameInstance( [' + ',\n'.join(self.text) + '] , ' + str(self.label) + ')'
+        return 'FrameEmbeddedLabelInstance( [' + ',\n'.join(self.text) + '] , ' + str(self.label) + ')'
 
     @overrides
     def words(self) -> Dict[str, List[str]]:
         # Accumulate words from each slot's phrase.
-        # Label is also a phrase, so additionally accumulate words from label
+        # Label is a vector representation of the phrase
         words = []
         for phrase in self.text:  # phrases
             phrase_words = self._words_from_text(phrase)
             words.extend(phrase_words['words'])
-        label_words = self._words_from_text(self.label)
-        words.extend(label_words['words'])
         return {'words': words, 'slot_names': SLOTNAMES_ORDERED}
 
     @staticmethod
-    def query_slot_from(slot_as_string: str,
-                        sparse_given_frame: Dict[str, str],
+    def query_slot_from(slot_as_dims: str,
                         kv_separator: str=":"):
         """
-        :param slot_as_string: "participant:water"
+        :param slot_as_dims: "participant:water"
         :param sparse_given_frame: If the expected slot name is given in the query
         but its value is not, then pick the value from the sparse_given_frame
         :param kv_separator: typically colon separated
-        :return: name=participant, val=water
+        :return: name=participant, val=0.98877,098762,-0.876,... embedding
         """
-        slot_name_val = slot_as_string.split(kv_separator)
-        # Suppose slot_as_string is: participant (i.e. no value is specified)
-        # this is assumed as participant:BLANK_VALUE, if we cannot look it up in the partial frame.
-        if len(slot_name_val) == 1:
-            slot_name_val = (slot_as_string + ":" +
-                             sparse_given_frame.get(slot_name_val[0], '')).split(kv_separator)
-        return {'name': slot_name_val[0], 'val': slot_name_val[1]}
+        slot_name_val = slot_as_dims.split(kv_separator)
+        csv_of_floats = slot_name_val[1]
+        val_arr = numpy.array(list(csv_of_floats
+                                   .replace('\n', ',')
+                                   .replace(' ', '')
+                                   .replace(',,', ',')
+                                   .split(',')),
+                              dtype='float64')
+        # val_arr = numpy.genfromtxt(StringIO(csv_of_floats), delimiter=",", dtype="float64", autostrip=True)
+        # The shape and type is automatically inferred by numpy based on csv of reals.
+        return {'name': slot_name_val[0], 'val': val_arr}
 
     @staticmethod
     def unpack_input(frame_as_string: str,
@@ -87,6 +87,7 @@ class FrameInstance(TextInstance):
         :param kv_separator: typically ":"
         :return: map of slotnames -> slot phrase [event -> plant absorb water , participant -> water]
         """
+        # ValueError: dictionary update sequence element  # 3 has length 1; 2 is required
         return dict(map(lambda x: x.split(kv_separator), slots_csv.split(values_separator)))
 
     @staticmethod
@@ -117,7 +118,7 @@ class FrameInstance(TextInstance):
     @overrides
     def read_from_line(cls, line: str):
         """
-        Reads a FrameInstance from a line.  The format is:
+        Reads a FrameEmbeddedLabelInstance from a line.  The format is:
         frame represented as list of <role:role value phrase of maxlen 5> TAB <label>
         e.g., from
         event:plant absorb water###participant:water###agent:plant###finalloc:soil
@@ -134,38 +135,37 @@ class FrameInstance(TextInstance):
         # e.g. from, participant:water, extract the expected slot value "water"
         unpacked_input = cls.unpack_input(line)
         given_sparse_frame = cls.given_slots_from(unpacked_input['content'])
-        query_slot = cls.query_slot_from(unpacked_input['query'], given_sparse_frame)
+        query_slot = cls.query_slot_from(unpacked_input['query'])
         dense_frame = cls.dense_frame_from(given_sparse_frame, query_slot['name'])
-        return cls(dense_frame, phrase_in_queried_slot=query_slot['val'])
+        return cls(dense_frame, phrase_dims_in_queried_slot=query_slot['val'])
 
     @overrides
     def to_indexed_instance(self, data_indexer: DataIndexer):
         # A phrase in a slot, is converted from list of words to list of wordids.
         # This is repeated for every slot, hence a list of list of wordids/integers.
         indices_slotvals = [self._index_text(phrase, data_indexer) for phrase in self.text]
-        # The label is a phrase, and is converted from list of words to list of wordids.
-        indices_label = self._index_text(self.label, data_indexer)
-        return IndexedFrameInstance(indices_slotvals, indices_label)
+        indices_label = self.label
+        return IndexedNumericalFrameInstance(indices_slotvals, indices_label)
 
 
-class IndexedFrameInstance(IndexedInstance):
+class IndexedNumericalFrameInstance(IndexedInstance):
     """
-    Ensures that a phrase in every slot, and the label (also a phrase) are padded to be of a fixed maxlen.
+    Ensures that a phrase in every slot.
     Max length of a phrase is 6 (configurable), pad phrases with fewer words; if it exceeds 6 then truncate.
     """
-    def __init__(self, word_indices: List[List[int]], label):
+    def __init__(self, word_indices: List[List[int]], label: numpy.array):
         """
         :param word_indices: One list of ints make up a slotvalue because a slotvalue is a phrase,
                              and so every word of the phrase is identified with an int id.
-        :param label: phrase, hence a list of ints.
+        :param label: embedding, hence an ndArray of type float64.
         """
-        super(IndexedFrameInstance, self).__init__(label)
+        super(IndexedNumericalFrameInstance, self).__init__(label)
         self.word_indices = word_indices
 
     @classmethod
     @overrides
     def empty_instance(cls):
-        return IndexedFrameInstance([], label=None)
+        return IndexedNumericalFrameInstance([], label=None)
 
     @overrides
     def get_padding_lengths(self) -> Dict[str, int]:
@@ -195,11 +195,11 @@ class IndexedFrameInstance(IndexedInstance):
         truncate_from_right = False
         self.word_indices = [self.pad_word_sequence(indices, padding_lengths, truncate_from_right)
                              for indices in self.word_indices]
-        self.label = self.pad_word_sequence(self.label, padding_lengths, truncate_from_right)
+        # labels are not strings, and need not be padded. We already provide a phrase vector.
 
     @overrides
     def as_training_data(self):
         # The frame and the label must be numpy matrix and array respectively
         frame_as_matrix = numpy.asarray(self.word_indices, dtype='int32')
-        label_as_list = numpy.asarray(self.label, dtype='int32')
-        return frame_as_matrix, label_as_list
+        label_as_embedding = self.label
+        return frame_as_matrix, label_as_embedding
