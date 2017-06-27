@@ -1,9 +1,11 @@
 from keras import backend as K
-from keras.engine import Layer, InputSpec
+from keras.engine import InputSpec
 from overrides import overrides
 
+from deep_qa.layers import MaskedLayer
 
-class AveragedBOWEncoder(Layer):
+
+class AveragedBOWEncoder(MaskedLayer):
     """
     An encoder that averages (like a BOWEncoder) over a particular dimension of the tensor.
     e.g., for a 4D tensor, averages over the specified dimension (e.g., = 2)
@@ -11,10 +13,10 @@ class AveragedBOWEncoder(Layer):
     can be decomposed into multiple words. Then, embedding for each word is averaged.
     """
     def __init__(self, averaging_over_dim=-2, num_dimensions=3, **kwargs):
-
-        self.input_spec = [InputSpec(ndim=num_dimensions)]
+        self.num_dimensions = num_dimensions
+        self.input_spec = [InputSpec(ndim=self.num_dimensions)]
         if averaging_over_dim < 0:
-            self.averaging_over_dim = num_dimensions + averaging_over_dim
+            self.averaging_over_dim = self.num_dimensions + averaging_over_dim
         else:
             self.averaging_over_dim = averaging_over_dim
         # For consistency of handling sentence encoders, we will often get passed this parameter.
@@ -88,3 +90,13 @@ class AveragedBOWEncoder(Layer):
                 weighted_mask = K.expand_dims(weighted_mask)
             averaged = K.sum(inputs * weighted_mask, axis=self.averaging_over_dim)
             return averaged
+
+    @overrides
+    def get_config(self):
+        base_config = super(AveragedBOWEncoder, self).get_config()
+        config = {
+                'averaging_over_dim': self.averaging_over_dim,
+                'num_dimensions': self.num_dimensions
+                }
+        config.update(base_config)
+        return config

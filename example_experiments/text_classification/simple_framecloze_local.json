@@ -1,5 +1,5 @@
 {
-    "model_class": "SimpleFrameCloze",
+    "model_class": "FrameClozeModel",
     "model_serialization_prefix": "/Users/nikett/Documents/work/code/thirdparty/deepqa/deep_qa/datasets-toy/models/simple_framecloze_test/",
     "seq2seq_encoder": {
         "default": {
@@ -11,15 +11,21 @@
         }
     },
     "num_stacked_rnns": 2,
-    "pretrained_embeddings_file": "/Users/nikett/Documents/work/code/thirdparty/deepqa/deep_qa/datasets-pulled/glove.6B.100d.txt.gz",
-    "embedding_dropout": 0.2,
+    "instance_type": "FrameEmbeddedLabelInstance",
+    "embeddings": {"words":
+                        {"dimension": 100,
+                            "pretrained_embeddings_file": "/Users/nikett/Documents/work/code/thirdparty/deepqa/deep_qa/datasets-pulled/glove.6B.100d.txt.gz"
+                        },
+                    "characters": {"dimension": 8}
+                  },
     "patience": 3,
-    "embedding_dim": {"words": 100, "characters": 8},
+    "loss": "mean_squared_error",
     "num_epochs": 10,
     "optimizer": {
       "type": "adadelta",
       "learning_rate": 0.5
     },
+    "validation_metric": "val_loss",
     "validation_files": ["/Users/nikett/Documents/work/code/thirdparty/deepqa/deep_qa/datasets-toy/framecloze-numerical.dev.sample.tsv"],
     "train_files": ["/Users/nikett/Documents/work/code/thirdparty/deepqa/deep_qa/datasets-toy/framecloze-numerical.train.sample.tsv"]
 }

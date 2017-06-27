@@ -2,8 +2,7 @@ from overrides import overrides
 
 from keras.layers import Dense, Dropout, Input
 
-# from deep_qa.data.instances.text_classification import concrete_instances
-from deep_qa.data.instances.sequence_tagging import concrete_instances
+from deep_qa.data.instances.text_classification import concrete_instances
 from deep_qa.layers.encoders import BOWEncoder
 from deep_qa.layers.encoders.AveragedBOWEncoder import AveragedBOWEncoder
 from ...training.text_trainer import TextTrainer
@@ -41,10 +40,12 @@ class FrameClozeModel(TextTrainer):
     def __init__(self, params: Params):
         self.num_stacked_rnns = params.pop('num_stacked_rnns', 1)
         instance_type = params.pop('instance_type', "FrameInstance")
-        self.nearest_neighbor_dim = params.pop('nearest_neighbor_dim', 200)
-        self.instance_type = concrete_instances[instance_type]  # TODO is this a bug?
+        self.nearest_neighbor_dim = params.pop('nearest_neighbor_dim', 100)
+        self.instance_type = concrete_instances[instance_type]
         super(FrameClozeModel, self).__init__(params)
-        self.num_slots = self._instance_type().words['slot_names']
+        # set this from json file, because instance_type is a class and not an instance
+        self.num_slots = params.pop('num_slots', 27)
+        # self.num_slots = self._instance_type().words()['slot_names']
 
     @overrides
     def _build_model(self):
@@ -52,17 +53,19 @@ class FrameClozeModel(TextTrainer):
         # Input: (slots, query-slot)
         # Output: (queried-slot-phrase-embedding)
 
-        # Step 1: Convert the sentence input into sequences of word vectors.
+        # Step 1: Convert the frame input into sequences of word vectors
+        # corresponding to the slot values/phrases (ignoring the slot names).
 
-        # train_input: numpy array: int32 (batch_size, num_slots, text_length).
+        # slots_input: numpy array: int32 (batch_size, num_slots, text_length).
         # Left padded arrays of word indices from sentences in training data.
         # We have a list of phrases as input. The base class implementation of
         # _get_sentence_shape provides sentence length, which is the phrase length
         # in this model. We shall additionally supply number of slots.
-        slots_input = Input(shape=(self._get_sentence_shape(),
-                                   self.num_slots),
-                            dtype='int32',
-                            name="slots_input")
+        slots_input = Input(
+                shape=((self.num_slots, ) + self._get_sentence_shape()),  # Note: excludes batch size
+                dtype='int32',  # shape encodes lengths, lengths are of type int.
+                name="slots_input"  # Should it be "words"?
+                )
 
         # Step 2: Pass the sequences of word vectors through the sentence encoder to get a sentence vector.
         # Shape: (batch_size, number_of_slots, max_phrase_len, embedding_dim)
@@ -99,7 +102,7 @@ class FrameClozeModel(TextTrainer):
         projected_frame = projection_layer(regularized_embedding)
 
         # Step 4: Define squared loss against labels as the loss.
-        # TODO: this requires that training input contain a vector representation of the queried slot as label.
+        # Requires that training input contain a vector representation of the queried slot as label.
         # Further, we need to find all the possible nearest neighbors for this vector.
         return DeepQaModel(inputs=slots_input, outputs=projected_frame)
 
@@ -110,9 +113,9 @@ class FrameClozeModel(TextTrainer):
     def _set_padding_lengths_from_model(self):
         # We return the dimensions of
         # 0th layer which is "indexed input" (0),
-        # 0th item in the input slot which is "phrase" [0],
-        # and everything that comes after the batch_size which "includes #words, #characters etc." [1:]
-        self._set_text_lengths_from_model_input(self.model.get_input_shape_at(0)[0][1:])
+        # and everything that comes after the batch_size which "includes #words, #characters etc." [2:]
+        # e.g., model.get_input_shape_at(0) -> None x 27 x 3 (BS x #slots x phrase_len_per_slot)
+        self._set_text_lengths_from_model_input(self.model.get_input_shape_at(0)[2:])
 
     @classmethod
     @overrides
@@ -120,5 +123,5 @@ class FrameClozeModel(TextTrainer):
         custom_objects = super(FrameClozeModel, cls)._get_custom_objects()
         # If we use any custom layers implemented in deep_qa (not part of original Keras),
         # they need to be added in the custom_objects dictionary.
-        custom_objects["BOWEncoder"] = BOWEncoder
+        custom_objects["AveragedBOWEncoder"] = AveragedBOWEncoder
         return custom_objects
